@@ -33,19 +33,19 @@ func (m *Mountain) draw() {
 }
 
 func (m *Mountain) update() {
-	mousepos := rl.GetMousePosition()
+	p := rl.GetMousePosition()
 	for i := 0; i < len(m.slopes); i++ {
 		m.slopes[i].scroll(6)
 	}
 
-	if (mousepos.X >= 0 && mousepos.X <= float32(m.config.windowWidth)) && (mousepos.Y >= 0 && mousepos.Y <= float32(m.config.windowHeight)) {
+	if (p.X >= 0 && p.X <= float32(m.config.windowWidth)) && (p.Y >= 0 && p.Y <= float32(m.config.windowHeight)) {
 		if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
 			m.slopes = append(m.slopes, NewSlope(m.config))
 			m.slopes[len(m.slopes)-1].add()
 			m.slopes[len(m.slopes)-1].active = true
 		}
 		if rl.IsMouseButtonDown(rl.MouseLeftButton) {
-			if mousepos.X > m.slopes[len(m.slopes)-1].lastPoint().X {
+			if p.X > m.slopes[len(m.slopes)-1].lastPoint().X {
 				m.slopes[len(m.slopes)-1].add()
 			}
 		}
@@ -185,14 +185,15 @@ func main() {
 
 	bkg2 := NewParallaxBackground(&cfg)
 	bkg2.add("assets/landscape_0001_2_trees_green.png", 7, rl.NewVector2(0, 350))
-	bkgGrad := rl.LoadTextureFromImage(rl.GenImageGradientV(int(cfg.windowWidth), int(0.65*float32(cfg.windowHeight)), rl.SkyBlue, rl.Beige))
+	bkgGrad := rl.LoadTextureFromImage(
+		rl.GenImageGradientV(int(cfg.windowWidth), int(0.65*float32(cfg.windowHeight)), rl.SkyBlue, rl.Beige))
 	for !rl.WindowShouldClose() {
 		mountain.update()
 		bkg.update()
 		bkg2.update()
 
 		rl.BeginDrawing()
-		rl.ClearBackground(rl.NewColor(235, 239, 242, 255))
+		//rl.ClearBackground(rl.NewColor(235, 239, 242, 255))
 		rl.DrawTexture(bkgGrad, 0, 0, rl.White)
 
 		bkg.draw()
