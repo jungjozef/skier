@@ -17,8 +17,42 @@ type Slope struct {
 	config     *Config
 }
 
-type Slps struct {
+type Mountain struct {
 	slopes []Slope
+	config *Config
+}
+
+func (m *Mountain) init() {
+	m.slopes = make([]Slope, 0)
+}
+
+func (m *Mountain) draw() {
+	for i := 0; i < len(m.slopes); i++ {
+		m.slopes[i].draw()
+	}
+}
+
+func (m *Mountain) update() {
+	mousepos := rl.GetMousePosition()
+	for i := 0; i < len(m.slopes); i++ {
+		m.slopes[i].scroll(6)
+	}
+
+	if (mousepos.X >= 0 && mousepos.X <= float32(m.config.windowWidth)) && (mousepos.Y >= 0 && mousepos.Y <= float32(m.config.windowHeight)) {
+		if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+			m.slopes = append(m.slopes, NewSlope(m.config))
+			m.slopes[len(m.slopes)-1].add()
+			m.slopes[len(m.slopes)-1].active = true
+		}
+		if rl.IsMouseButtonDown(rl.MouseLeftButton) {
+			if mousepos.X > m.slopes[len(m.slopes)-1].lastPoint().X {
+				m.slopes[len(m.slopes)-1].add()
+			}
+		}
+		if rl.IsMouseButtonReleased(rl.MouseLeftButton) {
+			m.slopes[len(m.slopes)-1].active = false
+		}
+	}
 }
 
 type ParallaxBackground struct {
@@ -72,35 +106,35 @@ func NewParallaxBackground(config *Config) (b ParallaxBackground) {
 	return b
 }
 
-func (slope *Slope) init() {
-	slope.pointCount = 0
-	slope.points = make([]rl.Vector2, 0)
-	slope.active = false
+func (s *Slope) init() {
+	s.pointCount = 0
+	s.points = make([]rl.Vector2, 0)
+	s.active = false
 }
 
-func (slope *Slope) add() {
-	slope.pointCount++
-	slope.points = append(slope.points, rl.GetMousePosition())
+func (s *Slope) add() {
+	s.pointCount++
+	s.points = append(s.points, rl.GetMousePosition())
 }
 
-func (slope *Slope) draw() {
-	if !slope.active && slope.lastPoint().X < -10 {
+func (s *Slope) draw() {
+	if !s.active && s.lastPoint().X < -10 {
 		return
 	}
-	if slope.pointCount > 0 {
-		for i := 1; i < len(slope.points); i++ {
+	if s.pointCount > 0 {
+		for i := 1; i < len(s.points); i++ {
 
-			pointA := slope.points[i-1]
-			pointB := slope.points[i]
+			pointA := s.points[i-1]
+			pointB := s.points[i]
 			pointNum := pointB.X - pointA.X
 			diffX := pointB.X - pointA.X
 			diffY := pointB.Y - pointA.Y
 			intervalX := diffX / (pointNum + 1)
 			intervalY := diffY / (pointNum + 1)
-			rl.DrawLineEx(slope.points[i-1], slope.points[i], 5, rl.RayWhite)
+			rl.DrawLineEx(s.points[i-1], s.points[i], 5, rl.RayWhite)
 			for j := 0; j < int(pointNum); j++ {
 				x1, y1 := pointA.X+intervalX*float32(j), pointA.Y+intervalY*float32(j)
-				x2, y2 := pointA.X+intervalX*float32(j), float32(slope.config.windowHeight)+pointA.Y+intervalY*float32(j)
+				x2, y2 := pointA.X+intervalX*float32(j), float32(s.config.windowHeight)+pointA.Y+intervalY*float32(j)
 				rl.DrawLineEx(rl.NewVector2(x1, y1+2.5), rl.NewVector2(x2, y2), 4, rl.LightGray)
 				rl.DrawLineEx(rl.NewVector2(x1, y1+30), rl.NewVector2(x2, y2), 4, rl.Gray)
 				rl.DrawLineEx(rl.NewVector2(x1, y1+60), rl.NewVector2(x2, y2), 4, rl.DarkGray)
@@ -111,20 +145,26 @@ func (slope *Slope) draw() {
 	}
 }
 
-func (slope *Slope) scroll(speed float32) {
-	for i := 0; i < int(slope.pointCount); i++ {
-		slope.points[i].X -= speed
+func (s *Slope) scroll(speed float32) {
+	for i := 0; i < int(s.pointCount); i++ {
+		s.points[i].X -= speed
 	}
 }
 
-func (slope *Slope) lastPoint() rl.Vector2 {
-	return slope.points[len(slope.points)-1]
+func (s *Slope) lastPoint() rl.Vector2 {
+	return s.points[len(s.points)-1]
 }
 
 func NewSlope(config *Config) (slope Slope) {
 	slope.init()
 	slope.config = config
 	return slope
+}
+
+func NewMountain(config *Config) (mountain Mountain) {
+	mountain.init()
+	mountain.config = config
+	return mountain
 }
 
 func main() {
@@ -135,47 +175,31 @@ func main() {
 	rl.SetTargetFPS(60)
 	rl.HideCursor()
 
-	slopes := make([]Slope, 0)
+	mountain := NewMountain(&cfg)
 	bkg := NewParallaxBackground(&cfg)
-	bkg.add("assets/landscape_0004_5_clouds.png", 1, rl.NewVector2(0, -100))
+	bkg.add("assets/landscape_0004_5_clouds.png", 0.5, rl.NewVector2(0, -100))
 	bkg.add("assets/landscape_0003_4_mountain.png", 2, rl.NewVector2(0, 0))
 	bkg.add("assets/landscape_0002_3_trees.png", 3, rl.NewVector2(0, 0))
 	bkg.add("assets/landscape_0001_2_trees.png", 4, rl.NewVector2(0, 0))
 	bkg.add("assets/landscape_0000_1_trees.png", 5, rl.NewVector2(0, 0))
+
+	bkg2 := NewParallaxBackground(&cfg)
+	bkg2.add("assets/landscape_0001_2_trees_green.png", 7, rl.NewVector2(0, 350))
 	bkgGrad := rl.LoadTextureFromImage(rl.GenImageGradientV(int(cfg.windowWidth), int(0.65*float32(cfg.windowHeight)), rl.SkyBlue, rl.Beige))
 	for !rl.WindowShouldClose() {
-
-		mousepos := rl.GetMousePosition()
-		for i := 0; i < len(slopes); i++ {
-			slopes[i].scroll(6)
-		}
-
-		if (mousepos.X >= 0 && mousepos.X <= float32(cfg.windowWidth)) && (mousepos.Y >= 0 && mousepos.Y <= float32(cfg.windowHeight)) {
-			if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
-				slopes = append(slopes, NewSlope(&cfg))
-				slopes[len(slopes)-1].add()
-				slopes[len(slopes)-1].active = true
-			}
-			if rl.IsMouseButtonDown(rl.MouseLeftButton) {
-				if mousepos.X > slopes[len(slopes)-1].lastPoint().X {
-					slopes[len(slopes)-1].add()
-				}
-			}
-			if rl.IsMouseButtonReleased(rl.MouseLeftButton) {
-				slopes[len(slopes)-1].active = false
-			}
-		}
+		mountain.update()
 		bkg.update()
+		bkg2.update()
 
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.NewColor(235, 239, 242, 255))
 		rl.DrawTexture(bkgGrad, 0, 0, rl.White)
 
 		bkg.draw()
-		for i := 0; i < len(slopes); i++ {
-			slopes[i].draw()
-		}
-		rl.DrawCircleV(mousepos, 10, rl.RayWhite)
+		mountain.draw()
+		rl.DrawCircleV(rl.GetMousePosition(), 10, rl.RayWhite)
+		bkg2.draw()
+
 		rl.EndDrawing()
 	}
 	rl.CloseWindow()
