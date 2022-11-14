@@ -2,6 +2,11 @@ package main
 
 import (
 	rl "github.com/gen2brain/raylib-go/raylib"
+	"math"
+)
+
+const (
+	gravity = 9.81
 )
 
 // Config related data structure
@@ -36,23 +41,21 @@ func (s *Slope) draw() {
 	}
 	if s.pointCount > 0 {
 		for i := 1; i < len(s.points); i++ {
-
-			pointA := s.points[i-1]
-			pointB := s.points[i]
-			pointNum := pointB.X - pointA.X
-			diffX := pointB.X - pointA.X
-			diffY := pointB.Y - pointA.Y
-			intervalX := diffX / (pointNum + 1)
-			intervalY := diffY / (pointNum + 1)
-			rl.DrawLineEx(s.points[i-1], s.points[i], 5, rl.RayWhite)
-			for j := 0; j < int(pointNum); j++ {
-				x1, y1 := pointA.X+intervalX*float32(j), pointA.Y+intervalY*float32(j)
-				x2, y2 := pointA.X+intervalX*float32(j), float32(s.config.windowHeight)+pointA.Y+intervalY*float32(j)
-				rl.DrawLineEx(rl.NewVector2(x1, y1+2.5), rl.NewVector2(x2, y2), 4, rl.LightGray)
-				rl.DrawLineEx(rl.NewVector2(x1, y1+30), rl.NewVector2(x2, y2), 4, rl.Gray)
-				rl.DrawLineEx(rl.NewVector2(x1, y1+60), rl.NewVector2(x2, y2), 4, rl.DarkGray)
+			for j := 0; j <= 2; j++ {
+				v0 := rl.NewVector2(s.points[i-1].X, s.points[i-1].Y+float32(j)*30)
+				v1 := rl.NewVector2(v0.X, float32(s.config.windowHeight))
+				v2 := rl.NewVector2(s.points[i].X, s.points[i].Y+float32(j)*30)
+				v4 := rl.NewVector2(v2.X, float32(s.config.windowHeight))
+				color := rl.LightGray
+				if j == 1 {
+					color = rl.Gray
+				} else if j == 2 {
+					color = rl.DarkGray
+				}
+				rl.DrawTriangleStrip([]rl.Vector2{v0, v1, v2, v4}, color)
 			}
 
+			rl.DrawLineEx(s.points[i-1], s.points[i], 5, rl.RayWhite)
 		}
 
 	}
@@ -180,6 +183,56 @@ func NewParallaxBackground(config *Config) (b ParallaxBackground) {
 // Skier related data structures and functions
 type Skier struct {
 	position rl.Vector2
+	texture  rl.Texture2D
+	velocity float32
+	mountain *Mountain
+}
+
+func (s *Skier) draw() {
+	rl.DrawTextureEx(s.texture, rl.NewVector2(s.position.X-32, s.position.Y-32), 0, 1, rl.White)
+}
+
+func (s *Skier) init() {
+	s.position = rl.NewVector2(400, 20)
+	img := rl.GenImageGradientRadial(64, 64, 0.5, rl.Yellow, rl.Blank)
+	s.texture = rl.LoadTextureFromImage(img)
+	s.velocity = 10
+}
+
+func (s *Skier) update() {
+	// find the closest slope coordinates
+	var nearestLeftPoint, nearestRightPoint rl.Vector2
+	for i := 0; i < len(s.mountain.slopes); i++ {
+		if s.mountain.slopes[i].lastPoint().X < 0 {
+			continue
+		}
+		for j := 0; j < len(s.mountain.slopes[i].points); j++ {
+			p := s.mountain.slopes[i].points[j]
+			if p.X > s.position.X {
+				nearestRightPoint = p
+			} else if p.X < s.position.X {
+				nearestLeftPoint = p
+			}
+		}
+		if &nearestLeftPoint != nil && &nearestRightPoint != nil {
+			println("L ", nearestLeftPoint.X, "; R ", nearestRightPoint.X)
+			break
+		}
+	}
+	if !(&nearestLeftPoint != nil && &nearestRightPoint != nil && rl.CheckCollisionPointLine(s.position, nearestLeftPoint, nearestRightPoint, int32(math.Abs(float64(nearestLeftPoint.X-nearestRightPoint.X))))) {
+		s.position.Y += s.velocity
+	} else {
+		s.position = rl.NewVector2(s.position.X, nearestRightPoint.Y)
+	}
+	if s.position.Y > 1080 {
+		s.position.Y = 0
+	}
+}
+
+func NewSkier(mountain *Mountain) (s Skier) {
+	s.init()
+	s.mountain = mountain
+	return s
 }
 
 // Skier end
@@ -195,6 +248,7 @@ func main() {
 
 	msx := rl.LoadMusicStream("assets/music1.mp3")
 	mountain := NewMountain(&cfg)
+	skier := NewSkier(&mountain)
 	bkg := NewParallaxBackground(&cfg)
 	bkg.add("assets/landscape_0004_5_clouds.png", 0.5, rl.NewVector2(0, -100))
 	bkg.add("assets/landscape_0003_4_mountain.png", 2, rl.NewVector2(0, 0))
@@ -206,23 +260,27 @@ func main() {
 	bkg2.add("assets/landscape_0001_2_trees_green.png", 7, rl.NewVector2(0, 350))
 	bkgGrad := rl.LoadTextureFromImage(
 		rl.GenImageGradientV(int(cfg.windowWidth), int(0.65*float32(cfg.windowHeight)), rl.SkyBlue, rl.Beige))
+	sun := rl.LoadTexture("assets/sun.png")
 	for !rl.WindowShouldClose() {
-		rl.UpdateMusicStream(msx)
+		//rl.UpdateMusicStream(msx)
 		if !rl.IsMusicStreamPlaying(msx) {
 			if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
 				rl.PlayMusicStream(msx)
 			}
 		}
 		mountain.update()
+		skier.update()
 		bkg.update()
 		bkg2.update()
 
 		rl.BeginDrawing()
 		//rl.ClearBackground(rl.NewColor(235, 239, 242, 255))
 		rl.DrawTexture(bkgGrad, 0, 0, rl.White)
+		rl.DrawTexture(sun, cfg.windowWidth/2-128, cfg.windowHeight/2, rl.White)
 
 		bkg.draw()
 		mountain.draw()
+		skier.draw()
 		rl.DrawCircleV(rl.GetMousePosition(), 10, rl.RayWhite)
 		bkg2.draw()
 
