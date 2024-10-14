@@ -1,5 +1,11 @@
 module skier
 
-go 1.19
+go 1.23
 
-require github.com/gen2brain/raylib-go/raylib v0.0.0-20221105143954-3f14ff470c35 // indirect
+require github.com/gen2brain/raylib-go/raylib v0.0.0-20241014163942-bf5ef1835077
+
+require (
+	github.com/ebitengine/purego v0.7.1 // indirect
+	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect
+	golang.org/x/sys v0.20.0 // indirect
+)

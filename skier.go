@@ -1,8 +1,8 @@
 package main
 
 import (
+	"fmt"
 	rl "github.com/gen2brain/raylib-go/raylib"
-	"math"
 )
 
 const (
@@ -40,6 +40,8 @@ func (s *Slope) draw() {
 		return
 	}
 	if s.pointCount > 0 {
+		//rl.DrawPixel(int32(s.points[0].X), 10, rl.Red)
+		rl.DrawCircle(int32(s.points[0].X), 1080, 6, rl.Red)
 		for i := 1; i < len(s.points); i++ {
 			for j := 0; j <= 2; j++ {
 				v0 := rl.NewVector2(s.points[i-1].X, s.points[i-1].Y+float32(j)*30)
@@ -56,6 +58,8 @@ func (s *Slope) draw() {
 			}
 
 			rl.DrawLineEx(s.points[i-1], s.points[i], 5, rl.RayWhite)
+			//rl.DrawTriangleFan(s.points, rl.White)
+
 		}
 
 	}
@@ -69,6 +73,29 @@ func (s *Slope) scroll(speed float32) {
 
 func (s *Slope) lastPoint() rl.Vector2 {
 	return s.points[len(s.points)-1]
+}
+
+func (s *Slope) heightAt(x float32) float32 {
+	if s.lastPoint().X < x {
+		return -1
+	}
+
+	for i := len(s.points) - 1; i >= 1; i-- {
+		p1 := s.points[i-1]
+		p2 := s.points[i]
+		if p1.X == x {
+			return p1.Y
+		}
+		if p2.X == x {
+			return p2.Y
+		}
+		if p1.X <= x && p2.X >= x {
+			return ((p2.Y-p1.Y)/(p2.X-p1.X))*(x-p1.X) + p1.Y
+		}
+	}
+
+	return -1
+
 }
 
 func NewSlope(config *Config) (slope Slope) {
@@ -95,10 +122,15 @@ func (m *Mountain) draw() {
 	}
 }
 
+func remove[T any](slice []T, i int) []T {
+	copy(slice[i:], slice[i+1:])
+	return slice[:len(slice)-1]
+}
+
 func (m *Mountain) update() {
 	p := rl.GetMousePosition()
 	for i := 0; i < len(m.slopes); i++ {
-		m.slopes[i].scroll(6)
+		m.slopes[i].scroll(12)
 	}
 
 	if (p.X >= 0 && p.X <= float32(m.config.windowWidth)) && (p.Y >= 0 && p.Y <= float32(m.config.windowHeight)) {
@@ -116,6 +148,24 @@ func (m *Mountain) update() {
 			m.slopes[len(m.slopes)-1].active = false
 		}
 	}
+	var activeSlopes = make([]Slope, 0)
+	for _, s := range m.slopes {
+		if s.lastPoint().X >= 0 {
+			activeSlopes = append(activeSlopes, s)
+		}
+	}
+	m.slopes = activeSlopes
+
+}
+
+func (m *Mountain) heightAt(x float32) (float32, *Slope) {
+	for i := len(m.slopes) - 1; i >= 0; i-- {
+		height := m.slopes[i].heightAt(x)
+		if height != -1 {
+			return height, &m.slopes[i]
+		}
+	}
+	return -1, nil
 }
 
 func NewMountain(config *Config) (mountain Mountain) {
@@ -186,6 +236,7 @@ type Skier struct {
 	texture  rl.Texture2D
 	velocity float32
 	mountain *Mountain
+	onSlope  bool
 }
 
 func (s *Skier) draw() {
@@ -196,37 +247,33 @@ func (s *Skier) init() {
 	s.position = rl.NewVector2(400, 20)
 	img := rl.GenImageGradientRadial(64, 64, 0.5, rl.Yellow, rl.Blank)
 	s.texture = rl.LoadTextureFromImage(img)
-	s.velocity = 10
+	s.velocity = 20
+	s.onSlope = false
 }
 
 func (s *Skier) update() {
-	// find the closest slope coordinates
-	var nearestLeftPoint, nearestRightPoint rl.Vector2
-	for i := 0; i < len(s.mountain.slopes); i++ {
-		if s.mountain.slopes[i].lastPoint().X < 0 {
-			continue
-		}
-		for j := 0; j < len(s.mountain.slopes[i].points); j++ {
-			p := s.mountain.slopes[i].points[j]
-			if p.X > s.position.X {
-				nearestRightPoint = p
-			} else if p.X < s.position.X {
-				nearestLeftPoint = p
-			}
-		}
-		if &nearestLeftPoint != nil && &nearestRightPoint != nil {
-			println("L ", nearestLeftPoint.X, "; R ", nearestRightPoint.X)
-			break
-		}
-	}
-	if !(&nearestLeftPoint != nil && &nearestRightPoint != nil && rl.CheckCollisionPointLine(s.position, nearestLeftPoint, nearestRightPoint, int32(math.Abs(float64(nearestLeftPoint.X-nearestRightPoint.X))))) {
-		s.position.Y += s.velocity
-	} else {
-		s.position = rl.NewVector2(s.position.X, nearestRightPoint.Y)
-	}
 	if s.position.Y > 1080 {
 		s.position.Y = 0
 	}
+	h, _ := s.mountain.heightAt(s.position.X)
+	if h == -1 {
+		s.position.Y += s.velocity
+		s.onSlope = false
+		return
+	}
+	if s.onSlope {
+		s.position.Y = h
+		return
+	}
+	nextPosY := s.position.Y + s.velocity
+	if s.position.Y < h && nextPosY > h {
+		s.position.Y = h
+		s.onSlope = true
+	} else {
+		s.position.Y = nextPosY
+		s.onSlope = false
+	}
+
 }
 
 func NewSkier(mountain *Mountain) (s Skier) {
@@ -259,7 +306,7 @@ func main() {
 	bkg2 := NewParallaxBackground(&cfg)
 	bkg2.add("assets/landscape_0001_2_trees_green.png", 7, rl.NewVector2(0, 350))
 	bkgGrad := rl.LoadTextureFromImage(
-		rl.GenImageGradientV(int(cfg.windowWidth), int(0.65*float32(cfg.windowHeight)), rl.SkyBlue, rl.Beige))
+		rl.GenImageGradientRadial(int(cfg.windowWidth), int(0.65*float32(cfg.windowHeight)), 12, rl.SkyBlue, rl.Beige))
 	sun := rl.LoadTexture("assets/sun.png")
 	for !rl.WindowShouldClose() {
 		//rl.UpdateMusicStream(msx)
@@ -283,6 +330,9 @@ func main() {
 		skier.draw()
 		rl.DrawCircleV(rl.GetMousePosition(), 10, rl.RayWhite)
 		bkg2.draw()
+		h, _ := mountain.heightAt(skier.position.X)
+		rl.DrawText(fmt.Sprintf("Slope: %f", h), 10, 10, 30, rl.Black)
+		rl.DrawText(fmt.Sprintf("Skier: %f", skier.position.Y), 10, 50, 30, rl.Black)
 
 		rl.EndDrawing()
 	}
