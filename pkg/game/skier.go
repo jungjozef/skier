@@ -8,14 +8,15 @@ import (
 
 // Physics constants
 const (
-	gravityAccel     = 0.6
-	baseScrollSpeed  = 12.0
-	maxScrollSpeed   = 30.0
-	minScrollSpeed   = 4.0
-	slopeAccelFactor = 0.15
-	friction         = 0.02
-	launchFactor     = 0.8
-	terminalVelocity = 25.0
+	gravityAccel     = 0.5
+	baseScrollSpeed  = 18.0
+	maxScrollSpeed   = 55.0
+	minScrollSpeed   = 6.0
+	slopeAccelFactor = 0.35
+	friction         = 0.003
+	launchFactor     = 1.2
+	jumpFactor       = 0.8
+	terminalVelocity = 30.0
 )
 
 type skier struct {
@@ -72,6 +73,16 @@ func (s *skier) update(scrollSpeed float32) float32 {
 			if scrollSpeed < minScrollSpeed {
 				scrollSpeed = minScrollSpeed
 			}
+			// Right-click jump — strength scales with momentum
+			if rl.IsMouseButtonPressed(rl.MouseRightButton) {
+				jumpStrength := scrollSpeed * jumpFactor
+				s.velocityY = -jumpStrength
+				// Uphill ramp bonus: steeper uphill = bigger launch
+				if angle < 0 {
+					s.velocityY += float32(math.Sin(float64(angle))) * scrollSpeed * 0.5
+				}
+				s.onSlope = false
+			}
 		}
 	} else {
 		// Airborne
@@ -95,10 +106,10 @@ func (s *skier) update(scrollSpeed float32) float32 {
 			// Landing speed adjustment based on angle difference
 			slopeAngle := s.mountain.angleAt(s.position.X)
 			angleDiff := float32(math.Abs(float64(slopeAngle - approachAngle)))
-			if angleDiff < 0.3 {
-				scrollSpeed *= 1.05 // Smooth landing bonus
+			if angleDiff < 0.5 {
+				scrollSpeed *= 1.1 // Smooth landing bonus
 			} else {
-				scrollSpeed *= 0.9 // Rough landing penalty
+				scrollSpeed *= 0.95 // Rough landing penalty
 			}
 			if scrollSpeed > maxScrollSpeed {
 				scrollSpeed = maxScrollSpeed

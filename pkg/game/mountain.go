@@ -26,13 +26,16 @@ func (m *mountain) update(scrollSpeed float32) {
 	}
 
 	if (p.X >= 0 && p.X <= float32(m.config.WindowWidth)) && (p.Y >= 0 && p.Y <= float32(m.config.WindowHeight)) {
-		if rl.IsMouseButtonPressed(rl.MouseLeftButton) {
+		existingH, _ := m.heightAt(p.X)
+		slopeExists := existingH != -1
+
+		if rl.IsMouseButtonPressed(rl.MouseLeftButton) && !slopeExists {
 			m.slopes = append(m.slopes, newSlope(m.config))
 			m.slopes[len(m.slopes)-1].add()
 			m.slopes[len(m.slopes)-1].active = true
 		}
-		if rl.IsMouseButtonDown(rl.MouseLeftButton) && len(m.slopes) > 0 {
-			if p.X > m.slopes[len(m.slopes)-1].lastPoint().X {
+		if rl.IsMouseButtonDown(rl.MouseLeftButton) && len(m.slopes) > 0 && m.slopes[len(m.slopes)-1].active {
+			if p.X > m.slopes[len(m.slopes)-1].lastPoint().X && !slopeExists {
 				m.slopes[len(m.slopes)-1].add()
 			}
 		}
